@@ -10,6 +10,9 @@ jobs:
       - uses: jwlawson/actions-setup-cmake@v1.14
         with:
           cmake-version: 3.22.1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.8'
       - name: Synthesize RELEASE-VERSION
         run: |
             echo "1.7.3rc0" > apis/python/RELEASE-VERSION
