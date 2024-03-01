@@ -20,4 +20,5 @@ jobs:
         run: make install
       - run: make clean
       - name: Build (debug)
-        run: make install build=Debug
+        run: |
+          make install build=Debug || (cat build/externals/src/ep_tiledb-stamp/ep_tiledb-configure-*.log; exit 1)
