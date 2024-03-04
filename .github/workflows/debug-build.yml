@@ -1,6 +1,8 @@
 name: Test debug build
 on:
   workflow_dispatch:
+env:
+  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
 jobs:
   build-debug:
     name: Test debug build
@@ -10,17 +12,25 @@ jobs:
       - uses: jwlawson/actions-setup-cmake@v1.14
         with:
           cmake-version: 3.22.1
+      - uses: actions/checkout@v4
+        with:
+          repository: 'microsoft/vcpkg'
+          path: 'vcpkg'
+          fetch-depth: 0
+      - name: Install vcpkg
+        working-directory: vcpkg
+        run: ./bootstrap-vcpkg.sh
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11.8'
           cache: pip
       - name: Synthesize RELEASE-VERSION
         run: echo "1.7.3rc0" > apis/python/RELEASE-VERSION
-      - name: Build (non-debug)
-        run: make install
-      - run: make clean
       - name: Build (debug)
+        env:
+          CMAKE_TOOLCHAIN_FILE: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         run: |
+          echo "CMAKE_TOOLCHAIN_FILE: $CMAKE_TOOLCHAIN_FILE"
           if ! make install build=Debug; then
             echo
             echo "build/externals/src/ep_tiledb-stamp/ep_tiledb-configure-out.log: "
