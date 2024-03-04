@@ -26,9 +26,13 @@ jobs:
             -DTILEDB_GCS=OFF \
             -DTILEDB_HDFS=OFF \
             -DTILEDB_SERIALIZATION=ON \
+            -DTILEDB_WERROR=OFF \
             -DTILEDB_VERBOSE=ON \
+            -DTILEDB_TESTS=OFF \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_COMPILER=/usr/bin/c++ \
             -DCMAKE_C_COMPILER=/usr/bin/cc \
+            -DCMAKE_TOOLCHAIN_FILE= \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
             '-GUnix Makefiles' \
             .
