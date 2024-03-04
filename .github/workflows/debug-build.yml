@@ -13,12 +13,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11.8'
+          cache: pip
       - name: Synthesize RELEASE-VERSION
-        run: |
-            echo "1.7.3rc0" > apis/python/RELEASE-VERSION
+        run: echo "1.7.3rc0" > apis/python/RELEASE-VERSION
       - name: Build (non-debug)
         run: make install
       - run: make clean
       - name: Build (debug)
         run: |
-          make install build=Debug || (cat build/externals/src/ep_tiledb-stamp/ep_tiledb-configure-*.log; exit 1)
+          if ! make install build=Debug; then
+            echo
+            echo "build/externals/src/ep_tiledb-stamp/ep_tiledb-configure-out.log: "
+            cat build/externals/src/ep_tiledb-stamp/ep_tiledb-configure-out.log
+            echo
+            echo "build/externals/src/ep_tiledb-stamp/ep_tiledb-configure-err.log: "
+            cat build/externals/src/ep_tiledb-stamp/ep_tiledb-configure-err.log
+            exit 1
+          fi
