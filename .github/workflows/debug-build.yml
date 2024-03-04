@@ -1,6 +1,11 @@
 name: Test debug build
 on:
   workflow_dispatch:
+    inputs:
+      set-CMAKE_TOOLCHAIN_FILE:
+        description: 'Set CMAKE_TOOLCHAIN_FILE env var (to $VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake)'
+        type: boolean
+        default: true
 env:
   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
 jobs:
@@ -12,14 +17,11 @@ jobs:
       - uses: jwlawson/actions-setup-cmake@v1.14
         with:
           cmake-version: 3.22.1
-      - uses: actions/checkout@v4
-        with:
-          repository: 'microsoft/vcpkg'
-          path: 'vcpkg'
-          fetch-depth: 0
       - name: Install vcpkg
-        working-directory: vcpkg
-        run: ./bootstrap-vcpkg.sh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git
+          cd vcpkg
+          ./bootstrap-vcpkg.sh
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11.8'
@@ -27,10 +29,13 @@ jobs:
       - name: Synthesize RELEASE-VERSION
         run: echo "1.7.3rc0" > apis/python/RELEASE-VERSION
       - name: Build (debug)
-        env:
-          CMAKE_TOOLCHAIN_FILE: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         run: |
-          echo "CMAKE_TOOLCHAIN_FILE: $CMAKE_TOOLCHAIN_FILE"
+          if [ "${{ inputs.set-CMAKE_TOOLCHAIN_FILE }}" = "true" ]; then
+            export CMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+            echo "CMAKE_TOOLCHAIN_FILE: $CMAKE_TOOLCHAIN_FILE"
+          else
+            echo "CMAKE_TOOLCHAIN_FILE: (unset)"
+          fi
           if ! make install build=Debug; then
             echo
             echo "build/externals/src/ep_tiledb-stamp/ep_tiledb-configure-out.log: "
