@@ -1,0 +1,45 @@
+name: Core debug build
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag'
+        required: true
+        default: '2.20.1'
+jobs:
+  build-debug:
+    name: Core debug build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: 'tiledb-inc/TileDB'
+          ref: ${{ inputs.ref }}
+      - uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: 3.22.1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.8'
+          cache: pip
+      - name: Build (debug)
+        run: |
+          cmake \
+            -DTILEDB_S3=ON \
+            -DTILEDB_AZURE=ON \
+            -DTILEDB_GCS=OFF \
+            -DTILEDB_HDFS=OFF \
+            -DTILEDB_SERIALIZATION=ON \
+            -DTILEDB_WERROR=OFF \
+            -DTILEDB_VERBOSE=OFF \
+            -DTILEDB_TESTS=OFF \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_OSX_ARCHITECTURES= \
+            -DCMAKE_C_FLAGS= \
+            -DCMAKE_CXX_FLAGS= \
+            -DCMAKE_CXX_COMPILER=/usr/bin/c++ \
+            -DCMAKE_C_COMPILER=/usr/bin/cc \
+            -DCMAKE_TOOLCHAIN_FILE= \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            '-GUnix Makefiles' \
+            .
