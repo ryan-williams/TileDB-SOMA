@@ -32,5 +32,6 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_COMPILER=/usr/bin/c++ \
             -DCMAKE_C_COMPILER=/usr/bin/cc \
+            -DCMAKE_TOOLCHAIN_FILE= \
             '-GUnix Makefiles' \
             .
