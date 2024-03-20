@@ -52,7 +52,7 @@ from .. import (
     logging,
 )
 from .._arrow_types import df_to_arrow, tiledb_type_from_arrow_type
-from .._collection import AnyTileDBCollection
+from .._collection import AnyTileDBCollection, CollectionBase
 from .._common_nd_array import NDArray
 from .._constants import SOMA_JOINID
 from .._exception import DoesNotExistError, SOMAError
@@ -1034,12 +1034,12 @@ def _create_or_open_collection(
 
 @typeguard_ignore
 def _create_or_open_collection(
-    cls: Type[Any],
+    cls: Type[CollectionBase[_TDBO]],
     uri: str,
     *,
     ingestion_params: IngestionParams,
     context: Optional[SOMATileDBContext],
-) -> Any:
+) -> CollectionBase[_TDBO]:
     try:
         thing = cls.open(uri, "w", context=context)
     except DoesNotExistError:
