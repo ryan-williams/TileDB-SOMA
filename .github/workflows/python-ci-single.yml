@@ -128,6 +128,14 @@ jobs:
 
     - name: Run pytests for Python
       shell: bash
+      env:
+        # TileDB Cloud and AWS credentials required for tests/test_basic_anndata_io.py::test_ingest_additional_metadata_cloud
+        TILEDB_REST_TOKEN: ${{ secrets.TILEDB_REST_TOKEN }}
+        TILEDB_TEST_USER: ${{ secrets.TILEDB_TEST_USER }}
+        TILEDB_TEST_BUCKET: ${{ secrets.TILEDB_TEST_BUCKET }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
       # Setting PYTHONPATH ensures the tests load the in-tree source code unde apis/python/src
       # instead of copy we `pip install`ed to site-packages above. That's needed for the code
       # coverage analysis to work.
