@@ -1,6 +1,8 @@
 import json
 import pathlib
 import tempfile
+from datetime import datetime
+from os import environ as env
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +13,7 @@ import pytest
 import scipy
 import somacore
 import tiledb
+from anndata import AnnData
 
 import tiledbsoma
 import tiledbsoma.io
@@ -719,16 +722,15 @@ def test_export_anndata(adata):
         assert readback.varp[key].shape == adata.varp[key].shape
 
 
-def test_ingest_additional_metadata(adata):
-    tempdir = tempfile.TemporaryDirectory()
-    output_path = tempdir.name
-
+def ingest_and_check_metadata(
+    adata: AnnData, experiment_uri: str, measurement_name: str = "RNA"
+):
     additional_metadata = {"key1": "val1", "key2": "val2"}
 
     tiledbsoma.io.from_anndata(
-        output_path,
+        experiment_uri,
         adata,
-        measurement_name="RNA",
+        measurement_name=measurement_name,
         additional_metadata=additional_metadata,
     )
 
@@ -736,10 +738,10 @@ def test_ingest_additional_metadata(adata):
         for k, v in additional_metadata.items():
             assert tdbo.metadata[k] == v
 
-    with _factory.open(output_path, soma_type=Experiment) as exp:
+    with _factory.open(experiment_uri, soma_type=Experiment) as exp:
         check(exp)
         check(exp.obs)
-        rna = exp.ms["RNA"]
+        rna = exp.ms[measurement_name]
         check(rna)
         check(rna.X)
         check(rna.obsm)
@@ -750,6 +752,34 @@ def test_ingest_additional_metadata(adata):
         raw = exp.ms["raw"]
         check(raw)
         check(raw.X)
+
+
+def test_ingest_additional_metadata(adata):
+    tempdir = tempfile.TemporaryDirectory()
+    output_path = tempdir.name
+    ingest_and_check_metadata(adata, output_path)
+
+
+TILEDB_REST_TOKEN = "TILEDB_REST_TOKEN"
+TILEDB_TEST_USER = "TILEDB_TEST_USER"
+TILEDB_TEST_BUCKET = "TILEDB_TEST_BUCKET"
+MISSING_TILEDB_TEST_VARS = [
+    var
+    for var in [TILEDB_REST_TOKEN, TILEDB_TEST_USER, TILEDB_TEST_BUCKET]
+    if not env.get(var)
+]
+
+
+@pytest.mark.skipif(
+    MISSING_TILEDB_TEST_VARS,
+    reason=f"Missing env vars: {', '.join(MISSING_TILEDB_TEST_VARS)}",
+)
+def test_ingest_additional_metadata_cloud(adata):
+    tiledb_user = env[TILEDB_TEST_USER]
+    tiledb_bucket = env[TILEDB_TEST_BUCKET]
+    dt = datetime.now().strftime("%Y%m%d%H%M%S.%f")[:-3]
+    experiment_uri = f"tiledb://{tiledb_user}/s3://{tiledb_bucket}/tests/test_ingest_additional_metadata_cloud-{dt}"
+    ingest_and_check_metadata(adata, experiment_uri)
 
 
 def test_null_obs(adata, tmp_path: Path):
