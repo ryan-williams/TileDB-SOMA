@@ -1259,9 +1259,9 @@ def test_outgest_X_layers(tmp_path):
 
 
 @pytest.mark.parametrize("dtype", ["float64", "string"])
-@pytest.mark.parametrize("all_nans", [False, True])
-@pytest.mark.parametrize("new_obs_ids", [False, True])
-def test_nan_append(adata, dtype, all_nans, new_obs_ids):
+@pytest.mark.parametrize("nans", ['all', 'none', 'some'])
+@pytest.mark.parametrize("new_obs_ids", ['all', 'none', 'half'])
+def test_nan_append(adata, dtype, nans, new_obs_ids):
     adata.obsm = None
     adata.varm = None
     adata.obsp = None
@@ -1270,16 +1270,29 @@ def test_nan_append(adata, dtype, all_nans, new_obs_ids):
 
     # Add empty column to obs
     obs = adata.obs
-    obs["batch_id"] = np.nan
-    if not all_nans:
-        elem = "batch_id" if dtype == "string" else 1.0
-        obs.loc[obs.index.tolist()[0], "batch_id"] = elem
+    if nans == 'all':
+        obs["batch_id"] = np.nan
+    else:
+        elem = "batch_id" if dtype == "string" else 1.23
+        if nans == 'some':
+            obs["batch_id"] = np.nan
+            obs.loc[obs.index.tolist()[0], "batch_id"] = elem
+        else:
+            obs["batch_id"] = elem
+
     obs["batch_id"] = obs["batch_id"].astype(dtype)
 
     # Create a copy of the anndata object
     adata2 = adata.copy()
-    if new_obs_ids:
-        adata2.obs.index = adata2.obs.index + "_2"
+    obs2 = adata2.obs
+    if new_obs_ids == 'all':
+        obs2.index = obs2.index + "_2"
+    elif new_obs_ids == 'half':
+        half = len(obs2) // 2
+        obs2.index = (
+            obs2.index[:half].tolist() +
+            (obs2.index[half:] + "_2").tolist()
+        )
 
     # Initial ingest
     SOMA_URI = tempfile.mkdtemp(prefix="soma-exp-")
