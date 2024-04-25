@@ -25,6 +25,7 @@ import tiledb
 from somacore import options
 from somacore.options import PlatformConfig
 from typing_extensions import Self
+import time
 
 from . import _util
 
@@ -175,8 +176,12 @@ class SparseNDArray(NDArray, somacore.SparseNDArray):
             result_order=_util.to_clib_result_order(result_order),
             timestamp=handle.timestamp and (0, handle.timestamp),
         )
-
-        return SparseNDArrayRead(sr, self, coords)
+        start = time.perf_counter()
+        print(f"SOMA-READ start:", start)
+        rv = SparseNDArrayRead(sr, self, coords)
+        end = time.perf_counter()
+        print(f"SOMA-READ duration:", end)
+        return rv
 
     def write(
         self,
@@ -539,7 +544,9 @@ class SparseNDArrayRead(_SparseNDArrayReadBase):
         Lifecycle:
             Experimental.
         """
-        return SparseNDArrayBlockwiseRead(
+        start = time.perf_counter()
+        print(f"SOMA-blockwise start:", start)
+        rv = SparseNDArrayBlockwiseRead(
             self.sr,
             self.array,
             self.coords,
@@ -548,6 +555,9 @@ class SparseNDArrayRead(_SparseNDArrayReadBase):
             reindex_disable_on_axis=reindex_disable_on_axis,
             eager=eager,
         )
+        end = time.perf_counter()
+        print(f"SOMA-blockwise duration:", end-start)
+        return rv
 
 
 class SparseNDArrayBlockwiseRead(_SparseNDArrayReadBase):
@@ -626,7 +636,9 @@ class SparseNDArrayBlockwiseRead(_SparseNDArrayReadBase):
         Lifecycle:
             Experimental.
         """
-        return BlockwiseScipyReadIter(
+        start = time.perf_counter()
+        print(f"scipy start:", start)
+        rv =  BlockwiseScipyReadIter(
             self.array,
             self.sr,
             self.coords,
@@ -637,3 +649,6 @@ class SparseNDArrayBlockwiseRead(_SparseNDArrayReadBase):
             eager=self.eager,
             context=self.array.context,
         )
+        end = time.perf_counter()
+        print(f"scipy duration:", end - start)
+        return rv
