@@ -1,0 +1,18 @@
+name: Test GHA "path" triggers
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**'
+      - '!**.md'
+      - '!apis/r/**'
+      - '!docs/**'
+      - '!.github/**'
+      - '.github/workflows/python-ci-minimal.yml'
+      - '.github/workflows/python-ci-single.yml'
+jobs:
+  test-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ls -la
