@@ -263,7 +263,5 @@ class Stats:
         return StatsDataFrames(timers_df=timers_df, counters_df=counters_df)
 
 
-stats = Stats()
+stats = TileDBSomaStats()
 profile = stats.collect
-tdb = stats.tdb
-tdbs = stats.tdbs
