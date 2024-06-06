@@ -1,3 +1,27 @@
+"""
+TileDB stats collection utilities.
+
+```python
+from tiledbsoma.stats import profile, stats
+
+with profile("open-exp"):
+    exp = Experiment.open(uri)
+
+with profile("query"):
+    q = exp.query(
+        "mtdna",
+        obs_query=tiledbsoma.AxisQuery(value_filter="tissue == 'lung'"),
+        var_query=tiledbsoma.AxisQuery(coords=(slice(50, 100),)),
+    )
+
+with profile("obs-to-pandas"):
+    query_obs = q.obs().concat().to_pandas()
+
+# DataFrames of timers and counters, for each profiled block
+timers_df, counters_df = stats.dfs
+```
+"""
+
 import json
 from abc import ABC
 from contextlib import redirect_stdout, contextmanager
@@ -15,7 +39,6 @@ from tiledbsoma import (
     tiledbsoma_stats_reset,
     tiledbsoma_stats_dump,
 )
-import tiledb
 
 
 @dataclass
@@ -110,24 +133,24 @@ StatsElems = list[StatsElem]
 StatsVal = Union[StatsElem, StatsElems]
 
 
-class Stats(ABC):
+class Stats:
     def __init__(self):
         self.stats: dict[str, StatsVal] = {}
 
     def enable(self) -> None:
-        raise NotImplementedError
+        tiledbsoma_stats_enable()
 
     def disable(self) -> None:
-        raise NotImplementedError
+        tiledbsoma_stats_disable()
 
     def reset(self) -> None:
-        raise NotImplementedError
+        tiledbsoma_stats_reset()
 
     def dump(self) -> None:
-        raise NotImplementedError
+        tiledbsoma_stats_dump()
 
     def header_regexs(self) -> list[str]:
-        raise NotImplementedError
+        return [r'libtiledb=\d+\.\d+\.\d+']
 
     def get(self, reset: bool = False) -> list[dict]:
         with TemporaryDirectory() as tmp_dir:
@@ -186,82 +209,5 @@ class Stats(ABC):
         return StatsDataFrames(timers_df=timers_df, counters_df=counters_df)
 
 
-class TileDBSomaStats(Stats):
-    def enable(self) -> None:
-        tiledbsoma_stats_enable()
-
-    def disable(self) -> None:
-        tiledbsoma_stats_disable()
-
-    def reset(self) -> None:
-        tiledbsoma_stats_reset()
-
-    def dump(self) -> None:
-        tiledbsoma_stats_dump()
-
-    def header_regexs(self) -> list[str]:
-        return [r'libtiledb=\d+\.\d+\.\d+']
-
-
-class TileDBStats(Stats):
-    def enable(self) -> None:
-        tiledb.stats_enable()
-
-    def disable(self) -> None:
-        tiledb.stats_disable()
-
-    def reset(self) -> None:
-        tiledb.stats_reset()
-
-    def dump(self) -> None:
-        tiledb.stats_dump()
-
-    def header_regexs(self) -> list[str]:
-        return [
-            r'TileDB Embedded Version: \(\d+, \d+, \d+\)',
-            r'TileDB-Py Version: \d+\.\d+\.\d+',
-        ]
-
-
-def contexts(ctxs):
-    @contextmanager
-    def fn(ctxs):
-        if not ctxs:
-            yield []
-        else:
-            [ ctx, *rest ] = ctxs
-            with ctx as v, fn(rest) as vs:
-                yield [ v, *vs ]
-    return fn(ctxs)
-
-
-class Stats:
-    def __init__(self):
-        self.tdb = TileDBStats()
-        self.tdbs = TileDBSomaStats()
-
-    @contextmanager
-    def collect(self, name: str, append: bool = False):
-        with contexts([
-            self.tdb.collect(name, append=append),
-            self.tdbs.collect(name, append=append),
-        ]):
-            yield
-
-    @property
-    def dfs(self) -> StatsDataFrames:
-        tdb_dfs = self.tdb.dfs
-        tdbs_dfs = self.tdbs.dfs
-        timers_df = pd.concat([
-            tdb_dfs.timers_df.assign(source='tiledb'),
-            tdbs_dfs.timers_df.assign(source='tiledbsoma'),
-        ]).reset_index(drop=True)
-        counters_df = pd.concat([
-            tdb_dfs.counters_df.assign(source='tiledb'),
-            tdbs_dfs.counters_df.assign(source='tiledbsoma'),
-        ]).reset_index(drop=True)
-        return StatsDataFrames(timers_df=timers_df, counters_df=counters_df)
-
-
-stats = TileDBSomaStats()
+stats = Stats()
 profile = stats.collect
