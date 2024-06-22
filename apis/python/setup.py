@@ -350,5 +350,5 @@ setuptools.setup(
     },
     python_requires=">=3.8",
     cmdclass={"build_ext": build_ext, "bdist_wheel": bdist_wheel},
-    version=version.get_version(),
+    version="1.11.4.1",
 )
