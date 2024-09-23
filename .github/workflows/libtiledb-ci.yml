@@ -5,6 +5,7 @@ on:
     paths-ignore:
       - "apis/python/**"
       - "apis/r/**"
+      - "docker/**"
       - ".pre-commit-config.yaml"
       - ".github/workflows/python-remote-storage.yml"
   push:

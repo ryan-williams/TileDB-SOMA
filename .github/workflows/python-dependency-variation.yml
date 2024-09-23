@@ -9,6 +9,7 @@ on:
     paths-ignore:
       - '**.md'
       - 'apis/r/**'
+      - 'docker/**'
       - 'docs/**'
       - ".github/workflows/python-remote-storage.yml"
   workflow_dispatch:
