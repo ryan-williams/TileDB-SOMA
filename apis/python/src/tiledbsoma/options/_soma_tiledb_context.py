@@ -50,6 +50,8 @@ def _maybe_timestamp_ms(input: Optional[OpenTimestamp]) -> Optional[int]:
 _Unset = Literal["__unset__"]
 _UNSET: _Unset = "__unset__"
 
+TileDBConfig = Dict[str, Union[str, float]]
+
 
 class SOMATileDBContext(ContextBase):
     """Maintains TileDB-specific context for TileDB-SOMA objects.
@@ -66,7 +68,7 @@ class SOMATileDBContext(ContextBase):
 
     def __init__(
         self,
-        tiledb_config: Optional[Dict[str, Union[str, float]]] = None,
+        tiledb_config: Optional[TileDBConfig] = None,
         timestamp: Optional[OpenTimestamp] = None,
         threadpool: Optional[ThreadPoolExecutor] = None,
     ) -> None:
@@ -119,7 +121,7 @@ class SOMATileDBContext(ContextBase):
         """
         self._lock = threading.Lock()
         """A lock to ensure single initialization of ``_tiledb_ctx``."""
-        self._initial_config: Optional[Dict[str, Union[str, float]]] = (
+        self._initial_config: Optional[TileDBConfig] = (
             None if tiledb_config is None else _default_config(tiledb_config)
         )
 
@@ -197,7 +199,7 @@ class SOMATileDBContext(ContextBase):
     def replace(
         self,
         *,
-        tiledb_config: Optional[Dict[str, Any]] = None,
+        tiledb_config: Optional[TileDBConfig] = None,
         timestamp: Union[None, OpenTimestamp, _Unset] = _UNSET,
         threadpool: Union[None, ThreadPoolExecutor, _Unset] = _UNSET,
     ) -> Self:
