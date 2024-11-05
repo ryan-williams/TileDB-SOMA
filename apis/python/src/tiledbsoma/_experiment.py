@@ -16,11 +16,12 @@ from ._collection import Collection, CollectionBase
 from ._dataframe import DataFrame
 from ._indexer import IntIndexer
 from ._measurement import Measurement
+from ._query import ExperimentAxisQuery
 from ._scene import Scene
 from ._soma_object import AnySOMAObject
 
 
-class Experiment(  # type: ignore[misc]  # __eq__ false positive
+class Experiment(  # type: ignore[misc]  # `__eq__`, `set` false positives
     CollectionBase[AnySOMAObject],
     experiment.Experiment[  # type: ignore[type-var]
         DataFrame,
@@ -83,13 +84,13 @@ class Experiment(  # type: ignore[misc]  # __eq__ false positive
         *,
         obs_query: Optional[query.AxisQuery] = None,
         var_query: Optional[query.AxisQuery] = None,
-    ) -> query.ExperimentAxisQuery[Self]:  # type: ignore
+    ) -> ExperimentAxisQuery[Self]:  # type: ignore
         """Creates an axis query over this experiment.
         Lifecycle: Maturing.
         """
         # mypy doesn't quite understand descriptors so it issues a spurious
         # error here.
-        return query.ExperimentAxisQuery(  # type: ignore
+        return ExperimentAxisQuery(  # type: ignore
             self,
             measurement_name,
             obs_query=obs_query or query.AxisQuery(),

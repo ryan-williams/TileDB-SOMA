@@ -1,7 +1,7 @@
 import re
 from concurrent import futures
 from contextlib import nullcontext
-from typing import Tuple
+from typing import Optional, Sequence, Tuple
 from unittest import mock
 
 import numpy as np
@@ -13,8 +13,9 @@ from scipy import sparse
 from somacore import AxisQuery, options
 
 import tiledbsoma as soma
-from tiledbsoma import SOMATileDBContext, _factory
+from tiledbsoma import Experiment, SOMATileDBContext
 from tiledbsoma._collection import CollectionBase
+from tiledbsoma._query import ExperimentAxisQuery
 from tiledbsoma.experiment_query import X_as_series
 
 from tests._util import raises_no_typeguard
@@ -88,18 +89,18 @@ def soma_experiment(
             for varm_layer_name in varm_layer_names:
                 add_sparse_array(varm, varm_layer_name, (n_vars, N_FEATURES))
 
-    return _factory.open((tmp_path / "exp").as_posix())
+    return Experiment.open((tmp_path / "exp").as_posix())
 
 
-def get_soma_experiment_with_context(soma_experiment, context):
+def get_soma_experiment_with_context(soma_experiment, context) -> Experiment:
     soma_experiment.close()
-    return _factory.open(soma_experiment.uri, context=context)
+    return Experiment.open(soma_experiment.uri, context=context)
 
 
 @pytest.mark.parametrize("n_obs,n_vars,X_layer_names", [(101, 11, ("raw", "extra"))])
 def test_experiment_query_all(soma_experiment):
     """Test a query with default obs_query / var_query -- i.e., query all."""
-    with soma.ExperimentAxisQuery(soma_experiment, "RNA") as query:
+    with ExperimentAxisQuery(soma_experiment, "RNA") as query:
         assert query.n_obs == 101
         assert query.n_vars == 11
 
@@ -134,8 +135,8 @@ def test_experiment_query_all(soma_experiment):
         ad = query.to_anndata("raw")
         assert ad.n_obs == query.n_obs and ad.n_vars == query.n_vars
 
-        assert set(ad.obs.keys().to_list()) == set(["soma_joinid", "label"])
-        assert set(ad.var.keys().to_list()) == set(["soma_joinid", "label"])
+        assert {ad.obs.keys()} == {"soma_joinid", "label"}
+        assert {ad.var.keys()} == {"soma_joinid", "label"}
 
         obs = soma_experiment.obs.read().concat().to_pandas()
         obs.index = obs.index.map(str)

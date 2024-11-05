@@ -39,6 +39,7 @@ from .. import (
 )
 from .._constants import SOMA_JOINID
 from .._exception import SOMAError
+from .._query import load_daskarray
 from .._types import NPNDArray, Path
 from . import conversions
 from ._common import (
@@ -107,6 +108,7 @@ def _extract_X_key(
     X_layer_name: str,
     nobs: int,
     nvar: int,
+    dask_chunk_size: Optional[int] = None,
 ) -> Matrix:
     """Helper function for to_anndata"""
     if X_layer_name not in measurement.X:
@@ -117,8 +119,13 @@ def _extract_X_key(
     # Acquire handle to TileDB-SOMA data
     soma_X_data_handle = measurement.X[X_layer_name]
 
+    if dask_chunk_size:
+        data = load_daskarray(
+            layer=soma_X_data_handle,
+            chunk_size=dask_chunk_size,
+        )
     # Read data from SOMA into memory
-    if isinstance(soma_X_data_handle, DenseNDArray):
+    elif isinstance(soma_X_data_handle, DenseNDArray):
         data = soma_X_data_handle.read((slice(None), slice(None))).to_numpy()
     elif isinstance(soma_X_data_handle, SparseNDArray):
         data = conversions.csr_from_coo_table(
@@ -201,6 +208,7 @@ def to_anndata(
     var_id_name: Optional[str] = None,
     obsm_varm_width_hints: Optional[Dict[str, Dict[str, int]]] = None,
     uns_keys: Optional[Sequence[str]] = None,
+    dask_chunk_size: Optional[int] = None,
 ) -> ad.AnnData:
     """Converts the experiment group to AnnData format.
 
@@ -292,15 +300,25 @@ def to_anndata(
     anndata_X_future: Future[Matrix] | None = None
     if X_layer_name is not None:
         anndata_X_future = tp.submit(
-            _extract_X_key, measurement, X_layer_name, nobs, nvar
+            _extract_X_key,
+            measurement=measurement,
+            X_layer_name=X_layer_name,
+            nobs=nobs,
+            nvar=nvar,
+            dask_chunk_size=dask_chunk_size,
         )
 
     if extra_X_layer_names is not None:
         for extra_X_layer_name in extra_X_layer_names:
             if extra_X_layer_name == X_layer_name:
                 continue
-            assert extra_X_layer_name is not None  # appease linter; already checked
-            data = _extract_X_key(measurement, extra_X_layer_name, nobs, nvar)
+            data = _extract_X_key(
+                measurement=measurement,
+                X_layer_name=extra_X_layer_name,
+                nobs=nobs,
+                nvar=nvar,
+                dask_chunk_size=dask_chunk_size,
+            )
             anndata_layers[extra_X_layer_name] = data
 
     if obsm_varm_width_hints is None:
