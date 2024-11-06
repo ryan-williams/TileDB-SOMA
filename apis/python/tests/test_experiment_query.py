@@ -24,27 +24,27 @@ N_FEATURES = 50
 
 
 @pytest.fixture
-def X_layer_names():
+def X_layer_names() -> Optional[Sequence[str]]:
     return ["raw"]
 
 
 @pytest.fixture
-def obsp_layer_names():
+def obsp_layer_names() -> Optional[Sequence[str]]:
     return None
 
 
 @pytest.fixture
-def varp_layer_names():
+def varp_layer_names() -> Optional[Sequence[str]]:
     return None
 
 
 @pytest.fixture
-def obsm_layer_names():
+def obsm_layer_names() -> Optional[Sequence[str]]:
     return None
 
 
 @pytest.fixture
-def varm_layer_names():
+def varm_layer_names() -> Optional[Sequence[str]]:
     return None
 
 
@@ -58,7 +58,7 @@ def soma_experiment(
     varp_layer_names,
     obsm_layer_names,
     varm_layer_names,
-):
+) -> Experiment:
     with soma.Experiment.create((tmp_path / "exp").as_posix()) as exp:
         add_dataframe(exp, "obs", n_obs)
         ms = exp.add_new_collection("ms")
