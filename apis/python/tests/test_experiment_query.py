@@ -4,6 +4,7 @@ from contextlib import nullcontext
 from typing import Optional, Sequence, Tuple
 from unittest import mock
 
+import attrs
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -15,7 +16,7 @@ from somacore import AxisQuery, options
 import tiledbsoma as soma
 from tiledbsoma import Experiment, SOMATileDBContext
 from tiledbsoma._collection import CollectionBase
-from tiledbsoma._query import ExperimentAxisQuery
+from tiledbsoma._query import Axis, ExperimentAxisQuery
 from tiledbsoma.experiment_query import X_as_series
 
 from tests._util import raises_no_typeguard
@@ -960,3 +961,24 @@ def test_empty_categorical_query(conftest_pbmc_small_exp):
     with ctx:
         obs = q.obs().concat()
         assert len(obs) == 0
+
+
+@attrs.define(frozen=True)
+class IHaveObsVarStuff:
+    obs: int
+    var: int
+    the_obs_suf: str
+    the_var_suf: str
+
+
+def test_axis_helpers() -> None:
+    thing = IHaveObsVarStuff(obs=1, var=2, the_obs_suf="observe", the_var_suf="vary")
+    assert 1 == Axis.OBS.getattr_from(thing)
+    assert 2 == Axis.VAR.getattr_from(thing)
+    assert "observe" == Axis.OBS.getattr_from(thing, pre="the_", suf="_suf")
+    assert "vary" == Axis.VAR.getattr_from(thing, pre="the_", suf="_suf")
+    ovdict = {"obs": "erve", "var": "y", "i_obscure": "hide", "i_varcure": "???"}
+    assert "erve" == Axis.OBS.getitem_from(ovdict)
+    assert "y" == Axis.VAR.getitem_from(ovdict)
+    assert "hide" == Axis.OBS.getitem_from(ovdict, pre="i_", suf="cure")
+    assert "???" == Axis.VAR.getitem_from(ovdict, pre="i_", suf="cure")
