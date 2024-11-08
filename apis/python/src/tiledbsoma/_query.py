@@ -12,30 +12,44 @@ from typing import (
     Any,
     Callable,
     Dict,
+    List,
     Literal,
     Mapping,
     Optional,
     Protocol,
     Sequence,
+    Tuple,
     TypeVar,
+    Union,
     cast,
     overload,
 )
 
-import attrs
 import numpy as np
 import numpy.typing as npt
-import pandas as pd
 import pyarrow as pa
-import pyarrow.compute as pacomp
 import scipy.sparse as sp
 from anndata import AnnData
+from somacore import DenseNDArray, query
+from somacore.query.query import (
+    AxisColumnNames,
+)
+
+from ._sparse_nd_array import SparseNDArray
+from .options import SOMATileDBContext
+
+if TYPE_CHECKING:
+    from ._experiment import Experiment  # noqa
+
+
+import attrs
+import pandas as pd
+import pyarrow.compute as pacomp
 from somacore import (
     AxisQuery,
     DataFrame,
     ReadIter,
     SparseRead,
-    query,
 )
 from somacore.data import _RO_AUTO
 from somacore.options import (
@@ -46,7 +60,6 @@ from somacore.options import (
     ResultOrderStr,
 )
 from somacore.query.query import (
-    AxisColumnNames,
     Numpyable,
 )
 from somacore.query.types import IndexFactory, IndexLike
@@ -56,7 +69,6 @@ if TYPE_CHECKING:
     from ._experiment import Experiment
 from ._fastercsx import CompressedMatrix
 from ._measurement import Measurement
-from ._sparse_nd_array import SparseNDArray
 from ._util import _resolve_futures
 
 _T = TypeVar("_T")
@@ -182,6 +194,16 @@ class AxisQueryResult:
             varp=(self.varp or None),
             layers=(self.X_layers or None),
         )
+
+
+if TYPE_CHECKING:
+    try:
+        import dask.array as da
+    except ImportError:
+        pass
+
+
+ChunkSize = Union[int, Tuple[Union[int, None], int]]
 
 
 class ExperimentAxisQuery:
@@ -445,6 +467,7 @@ class ExperimentAxisQuery:
         varm_layers: Sequence[str] = (),
         varp_layers: Sequence[str] = (),
         drop_levels: bool = False,
+        dask_chunk_size: Optional[ChunkSize] = None,
     ) -> AnnData:
         ad = self._read(
             X_name,
@@ -454,6 +477,7 @@ class ExperimentAxisQuery:
             obsp_layers=obsp_layers,
             varm_layers=varm_layers,
             varp_layers=varp_layers,
+            dask_chunk_size=dask_chunk_size,
         ).to_anndata()
 
         # Drop unused categories on axis dataframes if requested
@@ -487,6 +511,7 @@ class ExperimentAxisQuery:
         obsp_layers: Sequence[str] = (),
         varm_layers: Sequence[str] = (),
         varp_layers: Sequence[str] = (),
+        dask_chunk_size: Optional[ChunkSize] = None,
     ) -> AxisQueryResult:
         """Reads the entire query result in memory.
 
@@ -531,8 +556,17 @@ class ExperimentAxisQuery:
         var_joinids = self.var_joinids()
 
         x_matrices = {
-            _xname: self._threadpool.submit(
-                _read_as_csr, layer, obs_joinids, var_joinids, self._indexer
+            _xname: (
+                self._threadpool.submit(
+                    _read_as_csr, layer, obs_joinids, var_joinids, self._indexer
+                )
+                if not dask_chunk_size
+                else load_daskarray(
+                    layer=layer,
+                    chunk_size=dask_chunk_size,
+                    obs_joinids=obs_joinids,
+                    var_joinids=var_joinids,
+                )
             )
             for _xname, layer in all_x_arrays.items()
         }
@@ -726,6 +760,91 @@ class ExperimentAxisQuery:
         Returns the threadpool provided by the experiment's context.
         If not available, creates a thread pool just in time."""
         return self.experiment.context.threadpool
+
+
+def chunk_ids_sizes(
+    joinids: List[int], chunk_size: int, dim_size: int
+) -> Tuple[List[List[int]], List[int]]:
+    """Slice chunks from joinids, return chunks' joinids and sizes."""
+    chunk_joinids: List[List[int]] = []
+    chunk_sizes: List[int] = []
+    i = 0
+    n = len(joinids)
+    while i < n:
+        end_idx = min(n, i + chunk_size)
+        num = end_idx - i
+        chunk = joinids[i:end_idx]
+        chunk_joinids.append(chunk)
+        chunk_sizes.append(num)
+        i += num
+    return chunk_joinids, chunk_sizes
+
+
+def sparse_chunk(
+    block: npt.NDArray[Tuple[List[int], List[int]]],
+    block_info: Dict[Optional[int], Any],
+    uri: str,
+    tiledb_config: Dict[str, Union[str, float]],
+) -> sp.csr_matrix:
+    shape = block_info[None]["chunk-shape"]
+    assert block.shape == (1, 1)
+    joinids = block[0, 0]
+    obs_joinids, var_joinids = joinids
+    soma_ctx = SOMATileDBContext(tiledb_config=tiledb_config)
+    with SparseNDArray.open(uri, context=soma_ctx) as arr:
+        tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
+    soma_dim_0, soma_dim_1, data = [col.to_numpy() for col in tbl.columns]
+    obs_joinid_idx_map = {obs_joinid: idx for idx, obs_joinid in enumerate(obs_joinids)}
+    obs = [obs_joinid_idx_map[int(obs_joinid)] for obs_joinid in soma_dim_0]
+    var_joinid_idx_map = {var_joinid: idx for idx, var_joinid in enumerate(var_joinids)}
+    var = [var_joinid_idx_map[int(var_joinid)] for var_joinid in soma_dim_1]
+    return sp.csr_matrix((data, (obs, var)), shape=shape)
+
+
+def load_daskarray(
+    layer: Union[SparseNDArray, DenseNDArray],
+    chunk_size: ChunkSize,
+    obs_joinids: Optional[pa.IntegerArray] = None,
+    var_joinids: Optional[pa.IntegerArray] = None,
+) -> "da.Array":
+    """Load a TileDB-SOMA X layer as a Dask array, using ``tiledb`` or ``tiledbsoma``."""
+    import dask.array as da
+
+    _, _, data_dtype = layer.schema.types
+    dtype = data_dtype.to_pandas_dtype()
+    nobs, nvar = layer.shape
+
+    obs_ids = obs_joinids.to_numpy().tolist() if obs_joinids else list(range(nobs))
+    var_ids = var_joinids.to_numpy().tolist() if var_joinids else list(range(nvar))
+
+    if isinstance(chunk_size, int):
+        obs_chunk_size = chunk_size
+        var_chunk_size = nvar
+    else:
+        _obs_chunk_size, var_chunk_size = chunk_size
+        obs_chunk_size = _obs_chunk_size or nobs
+
+    obs_chunk_joinids, obs_chunk_sizes = chunk_ids_sizes(obs_ids, obs_chunk_size, nobs)
+    var_chunk_joinids, var_chunk_sizes = chunk_ids_sizes(var_ids, var_chunk_size, nvar)
+
+    arr = np.empty((len(obs_chunk_joinids), len(var_chunk_joinids)), dtype=object)
+    for obs_chunk_idx, obs_chunk_ids in enumerate(obs_chunk_joinids):
+        for var_chunk_idx, var_chunk_ids in enumerate(var_chunk_joinids):
+            arr[obs_chunk_idx, var_chunk_idx] = (obs_chunk_ids, var_chunk_ids)
+
+    if isinstance(layer, SparseNDArray):
+        chunk_joinids = da.from_array(arr, chunks=(1, 1))
+        X = da.map_blocks(
+            sparse_chunk,
+            chunk_joinids,
+            chunks=(tuple(obs_chunk_sizes), tuple(var_chunk_sizes)),
+            meta=sp.csr_matrix((0, 0), dtype=dtype),
+            uri=layer.uri,
+            tiledb_config=layer.context.tiledb_config,
+        )
+    else:
+        raise ValueError(f"Can't dask-load DenseNDArray: {layer.uri}")
+    return X
 
 
 @attrs.define(frozen=True)
