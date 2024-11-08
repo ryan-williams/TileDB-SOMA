@@ -9,6 +9,7 @@ import functools
 from typing import Optional
 
 from somacore import experiment, query
+from somacore.query.query import Experimentish
 
 from . import _tdb_handles
 from ._collection import Collection, CollectionBase
@@ -20,7 +21,7 @@ from ._scene import Scene
 from ._soma_object import AnySOMAObject
 
 
-class Experiment(  # type: ignore[misc]  # __eq__ false positive
+class Experiment(  # type: ignore[misc]  # `__eq__`, `set` false positives
     CollectionBase[AnySOMAObject],
     experiment.Experiment[  # type: ignore[type-var]
         DataFrame,
@@ -28,6 +29,7 @@ class Experiment(  # type: ignore[misc]  # __eq__ false positive
         Collection[Scene],
         AnySOMAObject,
     ],
+    Experimentish,
 ):
     """A collection subtype that combines observations and measurements
     from an individual experiment.

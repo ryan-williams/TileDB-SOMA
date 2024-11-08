@@ -40,6 +40,7 @@ from .. import (
 )
 from .._constants import SOMA_JOINID
 from .._exception import SOMAError
+from .._query import ChunkSize, load_daskarray
 from .._types import NPNDArray, Path
 from . import conversions
 from ._common import (
@@ -130,7 +131,11 @@ def _read_partitioned_sparse(X: SparseNDArray, d0_size: int) -> pa.Table:
 
 
 def _extract_X_key(
-    measurement: Measurement, X_layer_name: str, nobs: int, nvar: int
+    measurement: Measurement,
+    X_layer_name: str,
+    nobs: int,
+    nvar: int,
+    dask_chunk_size: Optional[ChunkSize] = None,
 ) -> Future[Matrix]:
     """Helper function for to_anndata"""
     if X_layer_name not in measurement.X:
@@ -142,8 +147,14 @@ def _extract_X_key(
     X = measurement.X[X_layer_name]
     tp = X.context.threadpool
 
+    if dask_chunk_size:
+        return tp.submit(
+            load_daskarray,
+            layer=X,
+            chunk_size=dask_chunk_size,
+        )
     # Read data from SOMA into memory
-    if isinstance(X, DenseNDArray):
+    elif isinstance(X, DenseNDArray):
 
         def _read_dense_X(A: DenseNDArray) -> Matrix:
             return A.read((slice(None), slice(None))).to_numpy()
@@ -235,6 +246,7 @@ def to_anndata(
     var_id_name: Optional[str] = None,
     obsm_varm_width_hints: Optional[Dict[str, Dict[str, int]]] = None,
     uns_keys: Optional[Sequence[str]] = None,
+    dask_chunk_size: Optional[ChunkSize] = None,
 ) -> ad.AnnData:
     """Converts the experiment group to AnnData format.
 
@@ -325,14 +337,25 @@ def to_anndata(
 
     anndata_X_future: Future[Matrix] | None = None
     if X_layer_name is not None:
-        anndata_X_future = _extract_X_key(measurement, X_layer_name, nobs, nvar)
+        anndata_X_future = _extract_X_key(
+            measurement=measurement,
+            X_layer_name=X_layer_name,
+            nobs=nobs,
+            nvar=nvar,
+            dask_chunk_size=dask_chunk_size,
+        )
 
     if extra_X_layer_names is not None:
         for extra_X_layer_name in extra_X_layer_names:
             if extra_X_layer_name == X_layer_name:
                 continue
-            assert extra_X_layer_name is not None  # appease linter; already checked
-            data = _extract_X_key(measurement, extra_X_layer_name, nobs, nvar)
+            data = _extract_X_key(
+                measurement=measurement,
+                X_layer_name=extra_X_layer_name,
+                nobs=nobs,
+                nvar=nvar,
+                dask_chunk_size=dask_chunk_size,
+            )
             anndata_layers_futures[extra_X_layer_name] = data
 
     if obsm_varm_width_hints is None:
