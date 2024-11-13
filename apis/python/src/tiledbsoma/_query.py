@@ -840,10 +840,9 @@ def load_daskarray(
     """Load a TileDB-SOMA X layer as a Dask array, using ``tiledb`` or ``tiledbsoma``."""
     import dask.array as da
 
-    with layer:
-        _, _, data_dtype = layer.schema.types
-        dtype = data_dtype.to_pandas_dtype()
-        nobs, nvar = layer.shape
+    _, _, data_dtype = layer.schema.types
+    dtype = data_dtype.to_pandas_dtype()
+    nobs, nvar = layer.shape
 
     obs_ids = obs_joinids.to_numpy().tolist() if obs_joinids else list(range(nobs))
     var_ids = var_joinids.to_numpy().tolist() if var_joinids else list(range(nvar))
