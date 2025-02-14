@@ -38,9 +38,12 @@
 # ```
 import json
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from os import makedirs, remove, cpu_count
 from os.path import join, exists, splitext, dirname
+from sys import stdout
+from time import perf_counter
 
 import dask
 from click import option, group, argument
@@ -136,7 +139,23 @@ def csr(
         remove(memray_bin_path)
 
     makedirs(dirname(memray_bin_path), exist_ok=True)
+    times = {}
+    cur_timer = None
+    cur_start = 0
+    def time(name: str | None = None):
+        nonlocal cur_timer, cur_start
+        now = perf_counter()
+        if cur_timer:
+            times[cur_timer] = now - cur_start
+        if name:
+            cur_timer = name
+            cur_start = perf_counter()
+        else:
+            cur_timer = None
+            cur_start = 0
+
     with memray.Tracker(memray_bin_path, native_traces=native_traces):
+        time("start")
         obs_joinids_path = join(joinids_dir, "obs.feather")
         var_joinids_path = join(joinids_dir, "var.feather")
         obs_tbl = feather.read_table(obs_joinids_path)
@@ -145,23 +164,31 @@ def csr(
         var_tbl = feather.read_table(var_joinids_path)
         var_joinids = var_tbl['var_joinids'].to_numpy().tolist()
         shape = (len(obs_joinids), len(var_joinids))
-        tiledb_config = {
-            "vfs.s3.no_sign_request": "true",
-            "vfs.s3.region": "us-west-2",
-        }
         soma_ctx = SOMATileDBContext(
-            tiledb_config=tiledb_config,
+            tiledb_config={
+                "vfs.s3.no_sign_request": "true",
+                "vfs.s3.region": "us-west-2",
+                "sm.io_concurrency_level": tdb_workers,
+                "sm.compute_concurrency_level": tdb_workers,
+            },
             threadpool=ThreadPoolExecutor(max_workers=tdb_workers)
         )
         uri = f"{CENSUS}/ms/RNA/X/raw"
+        time("open")
         with SparseNDArray.open(uri, context=soma_ctx) as arr:
+            time("read")
             tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
+            time("close")
+        time("cols")
         soma_dim_0, soma_dim_1, data = [col.to_numpy() for col in tbl.columns]
+        time("maps")
         obs_joinid_idx_map = {obs_joinid: idx for idx, obs_joinid in enumerate(obs_joinids)}
         obs = [obs_joinid_idx_map[int(obs_joinid)] for obs_joinid in soma_dim_0]
         var_joinid_idx_map = {var_joinid: idx for idx, var_joinid in enumerate(var_joinids)}
         var = [var_joinid_idx_map[int(var_joinid)] for var_joinid in soma_dim_1]
+        time("csr")
         csr = csr_matrix((data, (obs, var)), shape=shape)
+        time()
         nnz = csr.nnz
         err(f"CSR: {csr.shape}, {csr.nnz}")
 
@@ -171,13 +198,18 @@ def csr(
     with open(memray_json_path, 'r') as f:
         stats = json.load(f)
     peak = stats['metadata']['peak_memory']
-    err(f"Peak memory use: {peak} ({naturalsize(peak, binary=True)})")
+    err(f"Peak memory use: {peak} ({naturalsize(peak, binary=True, format="%.3g")})")
+    total_measured_time = sum(times.values())
+    err(f"Total measured time: {total_measured_time=:.4g}")
     out_json_path = f'{name}.json'
     stats = dict(
         shape=shape,
         nnz=nnz,
         peak_mem=peak,
+        times=times,
     )
+    json.dump(stats, stdout, indent=2)
+    print()
     with open(out_json_path, 'w') as f:
         json.dump(stats, f, indent=2)
 
