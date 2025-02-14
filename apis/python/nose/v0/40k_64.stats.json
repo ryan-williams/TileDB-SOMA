@@ -1,46 +1,46 @@
 {
-  "total_num_allocations": 11137548,
-  "total_bytes_allocated": 10059229056,
+  "total_num_allocations": 13386427,
+  "total_bytes_allocated": 54185986089,
   "allocation_size_histogram": [
     {
       "min_bytes": 0,
       "max_bytes": 6,
-      "count": 27047
+      "count": 91905
     },
     {
       "min_bytes": 7,
       "max_bytes": 62,
-      "count": 7502546
+      "count": 9018751
     },
     {
       "min_bytes": 63,
       "max_bytes": 510,
-      "count": 3365549
+      "count": 3702070
     },
     {
       "min_bytes": 511,
       "max_bytes": 4094,
-      "count": 231435
+      "count": 254260
     },
     {
       "min_bytes": 4095,
       "max_bytes": 32766,
-      "count": 2797
+      "count": 3376
     },
     {
       "min_bytes": 32767,
       "max_bytes": 262142,
-      "count": 6763
+      "count": 311318
     },
     {
       "min_bytes": 262143,
       "max_bytes": 2097150,
-      "count": 1301
+      "count": 4610
     },
     {
       "min_bytes": 2097151,
       "max_bytes": 16777214,
-      "count": 42
+      "count": 41
     },
     {
       "min_bytes": 16777215,
@@ -50,54 +50,54 @@
     {
       "min_bytes": 134217727,
       "max_bytes": 1073741823,
-      "count": 13
+      "count": 41
     }
   ],
   "allocator_type_distribution": {
-    "ALIGNED_ALLOC": 6425403,
-    "MALLOC": 4699463,
-    "REALLOC": 11944,
-    "CALLOC": 726,
-    "MMAP": 12
+    "MALLOC": 6878958,
+    "ALIGNED_ALLOC": 6462024,
+    "REALLOC": 44046,
+    "CALLOC": 1383,
+    "MMAP": 16
   },
   "top_allocations_by_size": [
     {
-      "location": "__next__:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/_read_iters.py:586",
-      "size": 3221273547
-    },
-    {
       "location": "<stack trace unavailable>",
-      "size": 2273374497
+      "size": 32824905621
     },
     {
-      "location": "csr:/home/ubuntu/TileDB-SOMA/apis/python/dsk.py:194",
-      "size": 1828755456
+      "location": "csr:/home/ubuntu/TileDB-SOMA/apis/python/dsk.py:199",
+      "size": 7516113280
     },
     {
-      "location": "csr:/home/ubuntu/TileDB-SOMA/apis/python/dsk.py:192",
-      "size": 1828755456
+      "location": "csr:/home/ubuntu/TileDB-SOMA/apis/python/dsk.py:197",
+      "size": 7516113280
+    },
+    {
+      "location": "__next__:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/_read_iters.py:586",
+      "size": 3221273907
     },
     {
       "location": "get_index_dtype:/home/ubuntu/.pyenv/versions/3.12.6/lib/python3.12/site-packages/scipy/sparse/_sputils.py:320",
-      "size": 393408736
+      "size": 1485318384
     }
   ],
   "top_allocations_by_count": [
     {
       "location": "<stack trace unavailable>",
-      "count": 10236471
+      "count": 12208772
     },
     {
       "location": "_set_coord_by_py_seq_or_np_array:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/_util.py:578",
-      "count": 775847
-    },
-    {
-      "location": "open:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/_tdb_handles.py:94",
-      "count": 77097
+      "count": 1105854
     },
     {
       "location": "native_context:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/options/_soma_tiledb_context.py:208",
-      "count": 44760
+      "count": 44886
+    },
+    {
+      "location": "open:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/_tdb_handles.py:94",
+      "count": 23509
     },
     {
       "location": "__attrs_post_init__:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/_read_iters.py:491",
@@ -105,13 +105,13 @@
     }
   ],
   "metadata": {
-    "start_time": "2025-02-14 19:49:16.128000+00:00",
-    "end_time": "2025-02-14 19:49:46.330000+00:00",
-    "total_allocations": 12692124,
+    "start_time": "2025-02-14 20:23:57.363000+00:00",
+    "end_time": "2025-02-14 20:28:43.238000+00:00",
+    "total_allocations": 17117895,
     "total_frames": 105,
-    "peak_memory": 4903466230,
-    "command_line": "dsk.py csr -c10k -o nose/v0 nose",
-    "pid": 30775,
+    "peak_memory": 7334775197,
+    "command_line": "dsk.py csr -c40k -o nose/v0 -T64 nose",
+    "pid": 37081,
     "main_thread_id": 1,
     "python_allocator": "pymalloc",
     "has_native_traces": true,
