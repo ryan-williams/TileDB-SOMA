@@ -1,117 +1,117 @@
 {
-  "total_num_allocations": 15442649,
-  "total_bytes_allocated": 44801347647,
+  "total_num_allocations": 14626535,
+  "total_bytes_allocated": 55107498933,
   "allocation_size_histogram": [
     {
       "min_bytes": 0,
       "max_bytes": 7,
-      "count": 247945
+      "count": 246615
     },
     {
       "min_bytes": 8,
-      "max_bytes": 65,
-      "count": 10233096
+      "max_bytes": 67,
+      "count": 9891160
     },
     {
-      "min_bytes": 66,
-      "max_bytes": 541,
-      "count": 4723138
+      "min_bytes": 68,
+      "max_bytes": 566,
+      "count": 4412676
     },
     {
-      "min_bytes": 542,
-      "max_bytes": 4420,
-      "count": 38750
+      "min_bytes": 567,
+      "max_bytes": 4693,
+      "count": 17872
     },
     {
-      "min_bytes": 4421,
-      "max_bytes": 36057,
-      "count": 139617
+      "min_bytes": 4694,
+      "max_bytes": 38857,
+      "count": 2880
     },
     {
-      "min_bytes": 36058,
-      "max_bytes": 294043,
-      "count": 54188
+      "min_bytes": 38858,
+      "max_bytes": 321644,
+      "count": 49330
     },
     {
-      "min_bytes": 294044,
-      "max_bytes": 2397810,
-      "count": 5843
+      "min_bytes": 321645,
+      "max_bytes": 2662401,
+      "count": 5849
     },
     {
-      "min_bytes": 2397811,
-      "max_bytes": 19553173,
-      "count": 12
+      "min_bytes": 2662402,
+      "max_bytes": 22037884,
+      "count": 44
     },
     {
-      "min_bytes": 19553174,
-      "max_bytes": 159448132,
-      "count": 25
+      "min_bytes": 22037885,
+      "max_bytes": 182417358,
+      "count": 56
     },
     {
-      "min_bytes": 159448133,
-      "max_bytes": 1300234239,
-      "count": 35
+      "min_bytes": 182417359,
+      "max_bytes": 1509949439,
+      "count": 53
     }
   ],
   "allocator_type_distribution": {
-    "MALLOC": 8796510,
-    "ALIGNED_ALLOC": 6571020,
-    "REALLOC": 73696,
-    "CALLOC": 1389,
-    "MMAP": 34
+    "MALLOC": 8041222,
+    "ALIGNED_ALLOC": 6510311,
+    "REALLOC": 73566,
+    "CALLOC": 1415,
+    "MMAP": 21
   },
   "top_allocations_by_size": [
     {
+      "location": "csr:/home/ubuntu/TileDB-SOMA/apis/python/dsk.py:191",
+      "size": 13544315904
+    },
+    {
+      "location": "csr:/home/ubuntu/TileDB-SOMA/apis/python/dsk.py:189",
+      "size": 13544315904
+    },
+    {
       "location": "<stack trace unavailable>",
-      "size": 10586492351
+      "size": 9044639043
+    },
+    {
+      "location": "csr:/home/ubuntu/TileDB-SOMA/apis/python/dsk.py:186",
+      "size": 6631195856
     },
     {
       "location": "__next__:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/_read_iters.py:586",
-      "size": 9663818790
-    },
-    {
-      "location": "take:/home/ubuntu/.pyenv/versions/3.12.6/lib/python3.12/site-packages/pyarrow/compute.py:499",
-      "size": 6845117136
-    },
-    {
-      "location": "wrapper:/home/ubuntu/.pyenv/versions/3.12.6/lib/python3.12/site-packages/pyarrow/compute.py:264",
-      "size": 6716250560
-    },
-    {
-      "location": "get_indexer:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/_indexer.py:106",
-      "size": 2871325328
+      "size": 6442545315
     }
   ],
   "top_allocations_by_count": [
     {
       "location": "<stack trace unavailable>",
-      "count": 13012086
+      "count": 12955095
     },
     {
       "location": "_set_coord_by_py_seq_or_np_array:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/_util.py:578",
-      "count": 2211709
-    },
-    {
-      "location": "wrapper:/home/ubuntu/.pyenv/versions/3.12.6/lib/python3.12/site-packages/pyarrow/compute.py:264",
-      "count": 82264
+      "count": 1545862
     },
     {
       "location": "open:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/_tdb_handles.py:94",
-      "count": 75576
+      "count": 76495
     },
     {
       "location": "native_context:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/options/_soma_tiledb_context.py:208",
       "count": 44760
+    },
+    {
+      "location": "__next__:/home/ubuntu/TileDB-SOMA/apis/python/src/tiledbsoma/_read_iters.py:586",
+      "count": 1753
     }
   ],
   "metadata": {
-    "start_time": "2025-02-14 21:49:40.228000+00:00",
-    "end_time": "2025-02-14 21:50:43.298000+00:00",
-    "total_allocations": 21301924,
-    "total_frames": 189,
-    "peak_memory": 17998691825,
+    "start_time": "2025-02-14 21:58:29.768000+00:00",
+    "end_time": "2025-02-14 22:01:17.359000+00:00",
+    "total_allocations": 19670050,
+    "total_frames": 105,
+    "peak_memory": 16824301340,
     "command_line": "dsk.py csr -c80k -o nose/v0 nose",
-    "pid": 59002,
+    "pid": 61698,
     "main_thread_id": 1,
     "python_allocator": "pymalloc",
     "has_native_traces": true,

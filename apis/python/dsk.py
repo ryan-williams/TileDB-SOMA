@@ -78,6 +78,7 @@ def parse_chunk_size(ctx, param, value):
 CENSUS = "s3://cellxgene-census-public-us-west-2/cell-census/2024-07-01/soma/census_data/homo_sapiens"
 chunk_size_opt = option('-c', '--chunk-size', callback=parse_chunk_size)
 memray_bin_opt = option('-m', '--memray-bin-path')
+method_opt = option('-M', '--method', count=True)
 no_native_traces_opt = option('-N', '--no-native-traces', is_flag=True)
 out_dir_opt = option('-o', '--out-dir')
 tissue_opt = option('-t', '--tissue', default='nose')
@@ -112,17 +113,19 @@ def joinids(tissue, joinids_dir):
 @cli.command
 @chunk_size_opt
 @memray_bin_opt
+@method_opt
 @no_native_traces_opt
 @out_dir_opt
 @tdb_workers_opt
 @argument('joinids_dir')
 def csr(
-    chunk_size,
-    memray_bin_path,
-    no_native_traces,
-    out_dir,
-    tdb_workers,
-    joinids_dir,
+    chunk_size: int | None,
+    memray_bin_path: str | None,
+    method: int,
+    no_native_traces: bool,
+    out_dir: str | None,
+    tdb_workers: int,
+    joinids_dir: str,
 ):
     if memray_bin_path is None:
         if chunk_size % 1000 == 0:
@@ -178,19 +181,33 @@ def csr(
         time("open")
         with SparseNDArray.open(uri, context=soma_ctx) as arr:
             time("read")
-            # tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
-            scipy = arr.read((obs_joinids, var_joinids)).blockwise(0).scipy()
-            time("csrs")
-            csrs, idxs = zip(*list(iter(scipy)))
-            time("close")
-        time("csr")
-        csr = vstack(csrs)
-        time()
+            if method == 0:
+                tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
+                soma_dim_0, soma_dim_1, data = [col.to_numpy() for col in tbl.columns]
+                time("maps")
+                obs_joinid_idx_map = {obs_joinid: idx for idx, obs_joinid in enumerate(obs_joinids)}
+                obs = [obs_joinid_idx_map[int(obs_joinid)] for obs_joinid in soma_dim_0]
+                var_joinid_idx_map = {var_joinid: idx for idx, var_joinid in enumerate(var_joinids)}
+                var = [var_joinid_idx_map[int(var_joinid)] for var_joinid in soma_dim_1]
+                time("csr")
+                csr = csr_matrix((data, (obs, var)), shape=shape)
+                time()
+            elif method == 1:
+                scipy = arr.read((obs_joinids, var_joinids)).blockwise(0).scipy()
+                time("csrs")
+                csrs, idxs = zip(*list(iter(scipy)))
+                time("close")
+                time("csr")
+                csr = vstack(csrs)
+                time()
+                if len(csrs) > 1:
+                    for i, c in enumerate(csrs):
+                        err(f"CSR block {i}: {repr(c)}")
+            else:
+                raise ValueError(f"Unrecognized -M/--method count: {method}")
+
         nnz = csr.nnz
         err(f"CSR: {csr.shape}, {csr.nnz}")
-        if len(csrs) > 1:
-            for i, c in enumerate(csrs):
-                err(f"CSR block {i}: {repr(c)}")
 
     name, _ = splitext(memray_bin_path)
     memray_json_path = f"{name}.stats.json"
