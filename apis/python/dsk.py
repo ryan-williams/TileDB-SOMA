@@ -53,6 +53,7 @@ from pyarrow import feather
 from scipy.sparse import csr_matrix
 from somacore import AxisQuery
 from tiledbsoma import Experiment, SparseNDArray, SOMATileDBContext
+from tiledbsoma._fastercsx import CompressedMatrix
 from tiledbsoma._query import load_daskarray
 
 import memray
@@ -180,6 +181,16 @@ def csr(
             tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
             time("close")
         time("cols")
+        # err(f"{tbl=}")
+        # nnz = len(tbl)
+        # cs = CompressedMatrix.from_soma(
+        #     tbl,
+        #     shape=shape,
+        #     format="csr",
+        #     make_sorted=True,
+        #     context=soma_ctx,
+        # )
+        # csr = cs.to_scipy()
         soma_dim_0, soma_dim_1, data = [col.to_numpy() for col in tbl.columns]
         time("maps")
         obs_joinid_idx_map = {obs_joinid: idx for idx, obs_joinid in enumerate(obs_joinids)}
