@@ -164,7 +164,6 @@ def test_from_soma_chunked_array(
         format="coo",
     )
 
-    tables = []
     i = np.array_split(sp.row.astype(np.int64), n_tables)
     j = np.array_split(sp.col.astype(np.int64), n_tables)
     d = np.array_split(sp.data, n_tables)
