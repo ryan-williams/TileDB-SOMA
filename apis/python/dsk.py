@@ -38,7 +38,6 @@
 # ```
 import json
 import re
-import time
 from concurrent.futures import ThreadPoolExecutor
 from os import makedirs, remove, cpu_count
 from os.path import join, exists, splitext, dirname
@@ -50,7 +49,8 @@ from click import option, group, argument
 import pyarrow as pa
 from humanize import naturalsize
 from pyarrow import feather
-from scipy.sparse import csr_matrix
+import numpy as np
+from scipy.sparse import csr_matrix, vstack
 from somacore import AxisQuery
 from tiledbsoma import Experiment, SparseNDArray, SOMATileDBContext
 from tiledbsoma._fastercsx import CompressedMatrix
@@ -178,30 +178,19 @@ def csr(
         time("open")
         with SparseNDArray.open(uri, context=soma_ctx) as arr:
             time("read")
-            tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
+            # tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
+            scipy = arr.read((obs_joinids, var_joinids)).blockwise(0).scipy()
+            time("csrs")
+            csrs, idxs = zip(*list(iter(scipy)))
             time("close")
-        time("cols")
-        # err(f"{tbl=}")
-        # nnz = len(tbl)
-        # cs = CompressedMatrix.from_soma(
-        #     tbl,
-        #     shape=shape,
-        #     format="csr",
-        #     make_sorted=True,
-        #     context=soma_ctx,
-        # )
-        # csr = cs.to_scipy()
-        soma_dim_0, soma_dim_1, data = [col.to_numpy() for col in tbl.columns]
-        time("maps")
-        obs_joinid_idx_map = {obs_joinid: idx for idx, obs_joinid in enumerate(obs_joinids)}
-        obs = [obs_joinid_idx_map[int(obs_joinid)] for obs_joinid in soma_dim_0]
-        var_joinid_idx_map = {var_joinid: idx for idx, var_joinid in enumerate(var_joinids)}
-        var = [var_joinid_idx_map[int(var_joinid)] for var_joinid in soma_dim_1]
         time("csr")
-        csr = csr_matrix((data, (obs, var)), shape=shape)
+        csr = vstack(csrs)
         time()
         nnz = csr.nnz
         err(f"CSR: {csr.shape}, {csr.nnz}")
+        if len(csrs) > 1:
+            for i, c in enumerate(csrs):
+                err(f"CSR block {i}: {repr(c)}")
 
     name, _ = splitext(memray_bin_path)
     memray_json_path = f"{name}.stats.json"
