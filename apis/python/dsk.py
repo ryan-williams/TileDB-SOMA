@@ -40,7 +40,7 @@ import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from os import makedirs, remove, cpu_count
-from os.path import join, exists, splitext
+from os.path import join, exists, splitext, dirname
 
 import dask
 from click import option, group, argument
@@ -75,6 +75,7 @@ CENSUS = "s3://cellxgene-census-public-us-west-2/cell-census/2024-07-01/soma/cen
 chunk_size_opt = option('-c', '--chunk-size', callback=parse_chunk_size)
 memray_bin_opt = option('-m', '--memray-bin-path')
 no_native_traces_opt = option('-N', '--no-native-traces', is_flag=True)
+out_dir_opt = option('-o', '--out-dir')
 tissue_opt = option('-t', '--tissue', default='nose')
 tdb_workers_opt = option('-T', '--tdb-workers', type=int, default=1)
 
@@ -108,12 +109,14 @@ def joinids(tissue, joinids_dir):
 @chunk_size_opt
 @memray_bin_opt
 @no_native_traces_opt
+@out_dir_opt
 @tdb_workers_opt
 @argument('joinids_dir')
 def csr(
     chunk_size,
     memray_bin_path,
     no_native_traces,
+    out_dir,
     tdb_workers,
     joinids_dir,
 ):
@@ -124,7 +127,7 @@ def csr(
             name = f'{chunk_size}'
         if tdb_workers != 1:
             name += f'_{tdb_workers if tdb_workers else cpu_count()}'
-        memray_bin_path = join(joinids_dir, f'{name}.bin')
+        memray_bin_path = join(out_dir or joinids_dir, f'{name}.bin')
         err(f"memray logging to {memray_bin_path}")
 
     native_traces = not no_native_traces
@@ -132,6 +135,7 @@ def csr(
         err(f"Removing existing {memray_bin_path}")
         remove(memray_bin_path)
 
+    makedirs(dirname(memray_bin_path), exist_ok=True)
     with memray.Tracker(memray_bin_path, native_traces=native_traces):
         obs_joinids_path = join(joinids_dir, "obs.feather")
         var_joinids_path = join(joinids_dir, "var.feather")
@@ -158,6 +162,7 @@ def csr(
         var_joinid_idx_map = {var_joinid: idx for idx, var_joinid in enumerate(var_joinids)}
         var = [var_joinid_idx_map[int(var_joinid)] for var_joinid in soma_dim_1]
         csr = csr_matrix((data, (obs, var)), shape=shape)
+        nnz = csr.nnz
         err(f"CSR: {csr.shape}, {csr.nnz}")
 
     name, _ = splitext(memray_bin_path)
@@ -169,8 +174,8 @@ def csr(
     err(f"Peak memory use: {peak} ({naturalsize(peak, binary=True)})")
     out_json_path = f'{name}.json'
     stats = dict(
-        shape=csr.shape,
-        nnz=csr.nnz,
+        shape=shape,
+        nnz=nnz,
         peak_mem=peak,
     )
     with open(out_json_path, 'w') as f:
