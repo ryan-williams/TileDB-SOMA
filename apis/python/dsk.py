@@ -47,6 +47,7 @@ from time import perf_counter
 import dask
 from click import option, group, argument
 import pyarrow as pa
+from humanfriendly import parse_size
 from humanize import naturalsize
 from pyarrow import feather
 import numpy as np
@@ -76,6 +77,7 @@ def parse_chunk_size(ctx, param, value):
 
 
 CENSUS = "s3://cellxgene-census-public-us-west-2/cell-census/2024-07-01/soma/census_data/homo_sapiens"
+mem_budget_opt = option('-b', '--mem-total-budget', callback=lambda ctx, param, val: parse_size(val))
 chunk_size_opt = option('-c', '--chunk-size', callback=parse_chunk_size)
 memray_bin_opt = option('-m', '--memray-bin-path')
 method_opt = option('-M', '--method', count=True)
@@ -111,6 +113,7 @@ def joinids(tissue, joinids_dir):
 
 
 @cli.command
+@mem_budget_opt
 @chunk_size_opt
 @memray_bin_opt
 @method_opt
@@ -119,6 +122,7 @@ def joinids(tissue, joinids_dir):
 @tdb_workers_opt
 @argument('joinids_dir')
 def csr(
+    mem_total_budget: str | None,
     chunk_size: int | None,
     memray_bin_path: str | None,
     method: int,
@@ -174,6 +178,11 @@ def csr(
                 "vfs.s3.region": "us-west-2",
                 "sm.io_concurrency_level": tdb_workers,
                 "sm.compute_concurrency_level": tdb_workers,
+                **({
+                       "sm.mem.total_budget": mem_total_budget,
+                       # "sm.memory_budget": mem_total_budget,
+                       # "sm.memory_budget_var": mem_total_budget,
+                   } if mem_total_budget else {}),
             },
             threadpool=ThreadPoolExecutor(max_workers=tdb_workers)
         )
