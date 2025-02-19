@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Tuple
 
 import anndata
+import dask
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -1556,14 +1557,41 @@ def test_from_h5ad_bad_uri():
 
 
 def test_dask_outgest(conftest_pbmc_small_exp):
-    layer = conftest_pbmc_small_exp.ms["RNA"].X["data"]
-    X = load_daskarray(
-        layer=layer,
-        chunk_size=20,
-    )
-    X = X.compute()
-    assert X.shape == (80, 20)
-    assert X.nnz == 1600
+    with dask.config.set(scheduler="single-threaded"):
+        layer = conftest_pbmc_small_exp.ms["RNA"].X["data"]
+        X = load_daskarray(
+            layer=layer,
+            chunk_size=20,
+        )
+        X = X.compute()
+        assert X.shape == (80, 20)
+        assert X.nnz == 1600
+
+
+def test_census_dask_chunk():
+    uri = "s3://cellxgene-census-public-us-west-2/cell-census/2024-07-01/soma/census_data/homo_sapiens"
+    with (
+        Experiment.open(uri, 'r') as exp,
+        dask.config.set(scheduler="single-threaded"),
+    ):
+        query = exp.axis_query(
+            measurement_name="RNA",
+            obs_query=AxisQuery(value_filter="is_primary_data == True and tissue_general == \"nose\""),
+        )
+        obs_joinids = query.obs_joinids()
+        X = exp.ms["RNA"].X["raw"]
+        x = load_daskarray(
+            layer=X,
+            chunk_size=10_000,
+            obs_joinids=obs_joinids,
+        )
+        # Compute just the first chunk
+        block = x.blocks[0, 0].compute()
+        print(block)
+
+    # X = X.compute()
+    # assert X.shape == (80, 20)
+    # assert X.nnz == 1600
 
 
 def coords(coord: SparseDFCoord) -> AxisQuery:
