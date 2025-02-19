@@ -208,6 +208,8 @@ def csr(
         nnz=nnz,
         peak_mem=peak,
         times=time.times,
+        total_time=total_measured_time,
+        bytes_per_nz=peak / nnz,
     )
     json.dump(stats, stdout, indent=2)
     print()
