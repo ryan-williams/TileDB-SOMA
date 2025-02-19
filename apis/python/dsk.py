@@ -166,24 +166,36 @@ def csr(
                     for i, c in enumerate(csrs):
                         err(f"CSR block {i}: {repr(c)}")
             elif method == 2:
-                tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
                 time("indexers")
-                obs_indexer = IntIndexer(obs_joinids, context=soma_ctx)  # TODO: i64 only
+                obs_indexer = IntIndexer(obs_joinids, context=soma_ctx)  # TODO: i32-based reindexing?
                 var_indexer = IntIndexer(var_joinids, context=soma_ctx)
-                time("indexing")
-                new_dim0 = obs_indexer.get_indexer(tbl['soma_dim_0'])
-                new_dim1 = var_indexer.get_indexer(tbl['soma_dim_1'])
-                time("data")
-                data = tbl['soma_data'].to_numpy()
-                time("tbl")
-                new_tbl = pa.Table.from_pydict({
-                    'soma_dim_0': new_dim0,
-                    'soma_dim_1': new_dim1,
-                    'soma_data': data,
-                })
-                time("csr")
+
+                new_tbls = []
+                time("read")
+                tbls = arr.read((obs_joinids, var_joinids)).tables()
+                idx = 0
+                while True:
+                    time(f"read-tbl-{idx}")
+                    try:
+                        tbl = next(tbls)
+                    except StopIteration:
+                        break
+                    time(f"indexing-{idx}")
+                    new_dim0 = obs_indexer.get_indexer(tbl['soma_dim_0'])
+                    new_dim1 = var_indexer.get_indexer(tbl['soma_dim_1'])
+                    time(f"data-{idx}")
+                    data = tbl['soma_data'].to_numpy()
+                    time(f"new-tbl-{idx}")
+                    new_tbl = pa.Table.from_pydict({
+                        'soma_dim_0': new_dim0,
+                        'soma_dim_1': new_dim1,
+                        'soma_data': data,
+                    })
+                    new_tbls.append(new_tbl)
+                    idx += 1
+                time("CompressedMatrix")
                 cm = CompressedMatrix.from_soma(
-                    new_tbl,
+                    new_tbls,
                     shape=shape,
                     format='csr',
                     make_sorted=True,
