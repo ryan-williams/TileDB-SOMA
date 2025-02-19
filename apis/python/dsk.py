@@ -1,48 +1,11 @@
 #!/usr/bin/env python
-#
-# ```bash
-# for k in 5 10 20 40 80; do
-#   n=nose-${k}k
-#   time mrno $n.bin dsk.py block -c ${k}000
-#   mfo $n.{html,bin}
-#   msjo $n.{json,bin}
-#   echo -n "Peak memory: "
-#   jr .metadata.peak_memory ${n}.json | thr
-# done
-# ```
-#
-# ```bash
-# for k in 5 10 20 40 80; do
-#   n=nose-${k}k
-#   time memray run --native -o $n.bin dsk.py block -c ${k}000
-#   memray flamegraph -o $n.{html,bin}
-#   memray stats --json -o $n.{json,bin}
-#   echo -n "Peak memory: "
-#   jq -r .metadata.peak_memory ${n}.json | thr
-# done
-# ```
-#
-# ```python
-# nnz = {
-#      5: 14670255,
-#     10: 24588046,
-#     20: 46447704,
-#     30: 68203751,
-#     40: 92832399,
-#     60: 137194577,
-#     80: 179431081,
-#    100: 210581850,
-# }
-# peaks = { n: json.load(open(f"nose-{n}k.json", 'r'))['metadata']['peak_memory'] for n, nz in nnz.items() }
-# { n: peaks[n] / nz for n, nz in nnz.items() }
-# ```
+
 import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from os import makedirs, remove, cpu_count
-from os.path import join, exists, splitext, dirname
+from os.path import join, exists, dirname, splitext
 from sys import stdout
-from time import perf_counter
 
 import dask
 from click import option, group, argument
@@ -57,8 +20,8 @@ from tiledbsoma import Experiment, SparseNDArray, SOMATileDBContext
 from tiledbsoma._fastercsx import CompressedMatrix
 from tiledbsoma._query import load_daskarray
 
-import memray
-from utz import err, run
+from utz import err, Time
+from utz.mem import Tracker
 
 
 @group
@@ -77,8 +40,9 @@ def parse_chunk_size(ctx, param, value):
 
 
 CENSUS = "s3://cellxgene-census-public-us-west-2/cell-census/2024-07-01/soma/census_data/homo_sapiens"
-mem_budget_opt = option('-b', '--mem-total-budget', callback=lambda ctx, param, val: parse_size(val))
+mem_budget_opt = option('-b', '--mem-total-budget', callback=lambda ctx, param, val: parse_size(val) if val else None)
 chunk_size_opt = option('-c', '--chunk-size', callback=parse_chunk_size)
+no_keep_memray_bin_opt = option('-K', '--no-keep-memray-bin', is_flag=True)
 memray_bin_opt = option('-m', '--memray-bin-path')
 method_opt = option('-M', '--method', count=True)
 no_native_traces_opt = option('-N', '--no-native-traces', is_flag=True)
@@ -115,6 +79,7 @@ def joinids(tissue, joinids_dir):
 @cli.command
 @mem_budget_opt
 @chunk_size_opt
+@no_keep_memray_bin_opt
 @memray_bin_opt
 @method_opt
 @no_native_traces_opt
@@ -124,6 +89,7 @@ def joinids(tissue, joinids_dir):
 def csr(
     mem_total_budget: str | None,
     chunk_size: int | None,
+    no_keep_memray_bin: bool,
     memray_bin_path: str | None,
     method: int,
     no_native_traces: bool,
@@ -147,22 +113,8 @@ def csr(
         remove(memray_bin_path)
 
     makedirs(dirname(memray_bin_path), exist_ok=True)
-    times = {}
-    cur_timer = None
-    cur_start = 0
-    def time(name: str | None = None):
-        nonlocal cur_timer, cur_start
-        now = perf_counter()
-        if cur_timer:
-            times[cur_timer] = now - cur_start
-        if name:
-            cur_timer = name
-            cur_start = perf_counter()
-        else:
-            cur_timer = None
-            cur_start = 0
-
-    with memray.Tracker(memray_bin_path, native_traces=native_traces):
+    time = Time()
+    with (mem := Tracker(memray_bin_path, native_traces=native_traces, keep=not no_keep_memray_bin)):
         time("start")
         obs_joinids_path = join(joinids_dir, "obs.feather")
         var_joinids_path = join(joinids_dir, "var.feather")
@@ -218,21 +170,16 @@ def csr(
         nnz = csr.nnz
         err(f"CSR: {csr.shape}, {csr.nnz}")
 
-    name, _ = splitext(memray_bin_path)
-    memray_json_path = f"{name}.stats.json"
-    run('memray', 'stats', '--json', '-fo', memray_json_path, memray_bin_path)
-    with open(memray_json_path, 'r') as f:
-        stats = json.load(f)
-    peak = stats['metadata']['peak_memory']
-    err(f"Peak memory use: {peak} ({naturalsize(peak, binary=True, format="%.3g")})")
-    total_measured_time = sum(times.values())
-    err(f"Total measured time: {total_measured_time=:.4g}")
-    out_json_path = f'{name}.json'
+    peak = mem.peak_mem
+    err(f"Peak memory use: {peak} ({naturalsize(peak, binary=True, format="%.3g")}); {peak / nnz:.3g} bytes/nz")
+    total_measured_time = sum(time.times.values())
+    err(f"Total measured time: {total_measured_time:.4g}")
+    out_json_path = f'{splitext(memray_bin_path)[0]}.json'
     stats = dict(
         shape=shape,
         nnz=nnz,
         peak_mem=peak,
-        times=times,
+        times=time.times,
     )
     json.dump(stats, stdout, indent=2)
     print()
