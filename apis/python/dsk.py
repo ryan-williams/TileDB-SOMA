@@ -124,8 +124,6 @@ def csr(
         obs_joinids = all_obs_joinids[:chunk_size].to_numpy().tolist()
         var_tbl = feather.read_table(var_joinids_path)
         var_joinids = var_tbl['var_joinids'].to_numpy().tolist()
-        obs_joinid_idx_map = {obs_joinid: idx for idx, obs_joinid in enumerate(sorted(obs_joinids))}
-        var_joinid_idx_map = {var_joinid: idx for idx, var_joinid in enumerate(sorted(var_joinids))}
         shape = (len(obs_joinids), len(var_joinids))
         soma_ctx = SOMATileDBContext(
             tiledb_config={
@@ -144,10 +142,14 @@ def csr(
         uri = f"{CENSUS}/ms/RNA/X/raw"
         time("open")
         with SparseNDArray.open(uri, context=soma_ctx) as arr:
-            time("read")
             if method == 0:
+                time("read")
                 tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
+                time("cols")
                 soma_dim_0, soma_dim_1, data = [col.to_numpy() for col in tbl.columns]
+                time("reindex-dicts")
+                obs_joinid_idx_map = {obs_joinid: idx for idx, obs_joinid in enumerate(sorted(obs_joinids))}
+                var_joinid_idx_map = {var_joinid: idx for idx, var_joinid in enumerate(sorted(var_joinids))}
                 time("maps")
                 obs = [obs_joinid_idx_map[int(obs_joinid)] for obs_joinid in soma_dim_0]
                 var = [var_joinid_idx_map[int(var_joinid)] for var_joinid in soma_dim_1]
@@ -155,6 +157,7 @@ def csr(
                 csr = csr_matrix((data, (obs, var)), shape=shape)
                 time()
             elif method == 1:
+                time("read")
                 scipy = arr.read((obs_joinids, var_joinids)).blockwise(0).scipy()
                 time("csrs")
                 csrs, idxs = zip(*list(iter(scipy)))
@@ -169,7 +172,6 @@ def csr(
                 time("indexers")
                 obs_indexer = IntIndexer(obs_joinids, context=soma_ctx)  # TODO: i32-based reindexing?
                 var_indexer = IntIndexer(var_joinids, context=soma_ctx)
-
                 new_tbls = []
                 time("read")
                 tbls = arr.read((obs_joinids, var_joinids)).tables()
@@ -181,15 +183,13 @@ def csr(
                     except StopIteration:
                         break
                     time(f"indexing-{idx}")
-                    new_dim0 = obs_indexer.get_indexer(tbl['soma_dim_0'])
-                    new_dim1 = var_indexer.get_indexer(tbl['soma_dim_1'])
-                    time(f"data-{idx}")
-                    data = tbl['soma_data'].to_numpy()
+                    new_dim0 = obs_indexer.get_indexer(tbl['soma_dim_0']).astype('int32')
+                    new_dim1 = var_indexer.get_indexer(tbl['soma_dim_1']).astype('int32')
                     time(f"new-tbl-{idx}")
                     new_tbl = pa.Table.from_pydict({
                         'soma_dim_0': new_dim0,
                         'soma_dim_1': new_dim1,
-                        'soma_data': data,
+                        'soma_data': tbl['soma_data'],
                     })
                     new_tbls.append(new_tbl)
                     idx += 1
