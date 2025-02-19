@@ -33,6 +33,7 @@ from somacore import DenseNDArray, query
 from somacore.query.query import (
     AxisColumnNames,
 )
+from tiledbsoma._indexer import IntIndexer
 
 from ._sparse_nd_array import SparseNDArray
 from .options import SOMATileDBContext
@@ -42,6 +43,7 @@ if TYPE_CHECKING:
 
 
 import attrs
+from functools import cache
 import pandas as pd
 import pyarrow.compute as pacomp
 from somacore import (
@@ -926,6 +928,11 @@ def chunk_ids_sizes(
     return chunk_joinids, chunk_sizes
 
 
+@cache
+def make_context(tiledb_config):
+    return SOMATileDBContext(tiledb_config=tiledb_config)
+
+
 def sparse_chunk(
     block: npt.NDArray[Tuple[List[int], List[int]]],
     block_info: Dict[int | None, Any],
@@ -936,15 +943,34 @@ def sparse_chunk(
     assert block.shape == (1, 1)
     joinids = block[0, 0]
     obs_joinids, var_joinids = joinids
-    soma_ctx = SOMATileDBContext(tiledb_config=tiledb_config)
+    soma_ctx = make_context(tiledb_config=tiledb_config)  # TODO: memoize
     with SparseNDArray.open(uri, context=soma_ctx) as arr:
         tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
-    soma_dim_0, soma_dim_1, data = [col.to_numpy() for col in tbl.columns]
-    obs_joinid_idx_map = {obs_joinid: idx for idx, obs_joinid in enumerate(obs_joinids)}
-    obs = [obs_joinid_idx_map[int(obs_joinid)] for obs_joinid in soma_dim_0]
-    var_joinid_idx_map = {var_joinid: idx for idx, var_joinid in enumerate(var_joinids)}
-    var = [var_joinid_idx_map[int(var_joinid)] for var_joinid in soma_dim_1]
-    return sp.csr_matrix((data, (obs, var)), shape=shape)
+    # TODO: create sequence of tables for CM.from_soma; use record batches (idiomatic Arrow)
+    obs_indexer = IntIndexer(obs_joinids, soma_ctx)  # TODO: i64 only
+    var_indexer = IntIndexer(var_joinids, soma_ctx)
+    new_dim0 = obs_indexer.get_indexer(tbl.columns['soma_dim_0'])
+    new_dim1 = var_indexer.get_indexer(tbl.columns['soma_dim_1'])
+    data = tbl.columns['data'].to_numpy()
+    new_tbl = pa.Table.from_pydict({
+        'soma_dim_0': new_dim0,
+        'soma_dim_1': new_dim1,
+        'data': data,
+    })
+    return CompressedMatrix.from_soma(
+        new_tbl,
+        shape=shape,
+        format='csr',
+        make_sorted=True,
+        context=soma_ctx,
+    ).to_scipy()
+
+    # soma_dim_0, soma_dim_1, data = [col.to_numpy() for col in tbl.columns]
+    # obs_joinid_idx_map = {obs_joinid: idx for idx, obs_joinid in enumerate(sorted(obs_joinids))}
+    # var_joinid_idx_map = {var_joinid: idx for idx, var_joinid in enumerate(sorted(var_joinids))}  # TODO: memoized/cached
+    # obs = [obs_joinid_idx_map[int(obs_joinid)] for obs_joinid in soma_dim_0]
+    # var = [var_joinid_idx_map[int(var_joinid)] for var_joinid in soma_dim_1]
+    # return sp.csr_matrix((data, (obs, var)), shape=shape)
 
 
 def load_daskarray(
