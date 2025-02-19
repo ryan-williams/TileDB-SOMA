@@ -19,6 +19,7 @@ from somacore import AxisQuery
 from tiledbsoma import Experiment, SparseNDArray, SOMATileDBContext
 from tiledbsoma._fastercsx import CompressedMatrix
 from tiledbsoma._query import load_daskarray
+from tiledbsoma._indexer import IntIndexer
 
 from utz import err, Time
 from utz.mem import Tracker
@@ -44,7 +45,7 @@ mem_budget_opt = option('-b', '--mem-total-budget', callback=lambda ctx, param, 
 chunk_size_opt = option('-c', '--chunk-size', callback=parse_chunk_size)
 no_keep_memray_bin_opt = option('-K', '--no-keep-memray-bin', is_flag=True)
 memray_bin_opt = option('-m', '--memray-bin-path')
-method_opt = option('-M', '--method', count=True)
+method_opt = option('-M', '--method', count=True, help='0x: "naive" reindexing+CSR-construction, 1x: .blockwise().scipy, 2x: IntIndexer/fastercsx')
 no_native_traces_opt = option('-N', '--no-native-traces', is_flag=True)
 out_dir_opt = option('-o', '--out-dir')
 tissue_opt = option('-t', '--tissue', default='nose')
@@ -123,6 +124,8 @@ def csr(
         obs_joinids = all_obs_joinids[:chunk_size].to_numpy().tolist()
         var_tbl = feather.read_table(var_joinids_path)
         var_joinids = var_tbl['var_joinids'].to_numpy().tolist()
+        obs_joinid_idx_map = {obs_joinid: idx for idx, obs_joinid in enumerate(sorted(obs_joinids))}
+        var_joinid_idx_map = {var_joinid: idx for idx, var_joinid in enumerate(sorted(var_joinids))}
         shape = (len(obs_joinids), len(var_joinids))
         soma_ctx = SOMATileDBContext(
             tiledb_config={
@@ -146,9 +149,7 @@ def csr(
                 tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
                 soma_dim_0, soma_dim_1, data = [col.to_numpy() for col in tbl.columns]
                 time("maps")
-                obs_joinid_idx_map = {obs_joinid: idx for idx, obs_joinid in enumerate(obs_joinids)}
                 obs = [obs_joinid_idx_map[int(obs_joinid)] for obs_joinid in soma_dim_0]
-                var_joinid_idx_map = {var_joinid: idx for idx, var_joinid in enumerate(var_joinids)}
                 var = [var_joinid_idx_map[int(var_joinid)] for var_joinid in soma_dim_1]
                 time("csr")
                 csr = csr_matrix((data, (obs, var)), shape=shape)
@@ -164,6 +165,33 @@ def csr(
                 if len(csrs) > 1:
                     for i, c in enumerate(csrs):
                         err(f"CSR block {i}: {repr(c)}")
+            elif method == 2:
+                tbl = arr.read((obs_joinids, var_joinids)).tables().concat()
+                time("indexers")
+                obs_indexer = IntIndexer(obs_joinids, context=soma_ctx)  # TODO: i64 only
+                var_indexer = IntIndexer(var_joinids, context=soma_ctx)
+                time("indexing")
+                new_dim0 = obs_indexer.get_indexer(tbl['soma_dim_0'])
+                new_dim1 = var_indexer.get_indexer(tbl['soma_dim_1'])
+                time("data")
+                data = tbl['soma_data'].to_numpy()
+                time("tbl")
+                new_tbl = pa.Table.from_pydict({
+                    'soma_dim_0': new_dim0,
+                    'soma_dim_1': new_dim1,
+                    'soma_data': data,
+                })
+                time("csr")
+                cm = CompressedMatrix.from_soma(
+                    new_tbl,
+                    shape=shape,
+                    format='csr',
+                    make_sorted=True,
+                    context=soma_ctx,
+                )
+                time("csr")
+                csr = cm.to_scipy()
+                time()
             else:
                 raise ValueError(f"Unrecognized -M/--method count: {method}")
 
