@@ -9,7 +9,7 @@ import functools
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, Literal, Mapping
+from typing import Any, Dict, Literal, Mapping, Union
 
 from somacore import ContextBase
 from typing_extensions import Self
@@ -33,6 +33,10 @@ except ModuleNotFoundError:
     TILEDB_EXISTS = False
 
 
+ConfigVal = Union[str, float]
+Config = Dict[str, ConfigVal]
+
+
 def _check_tiledb_ctx() -> None:
     if not TILEDB_EXISTS:
         raise ModuleNotFoundError(
@@ -41,15 +45,13 @@ def _check_tiledb_ctx() -> None:
         )
 
 
-def _default_config(override: Mapping[str, str | float]) -> Dict[str, str | float]:
+def _default_config(override: Mapping[str, str | float]) -> Config:
     """Returns a fresh dictionary with TileDB config values.
 
     These should be reasonable defaults that can be used out-of-the-box.
     ``override`` does exactly what it says: overrides default entries.
     """
-    cfg: Dict[str, str | float] = {
-        "sm.mem.reader.sparse_global_order.ratio_array_data": 0.3
-    }
+    cfg: Config = {"sm.mem.reader.sparse_global_order.ratio_array_data": 0.3}
     cfg.update(override)
     return cfg
 
@@ -85,7 +87,7 @@ class SOMATileDBContext(ContextBase):
 
     def __init__(
         self,
-        tiledb_config: Dict[str, str | float] | None = None,
+        tiledb_config: Config | None = None,
         tiledb_ctx: TileDBCtx | None = None,
         timestamp: OpenTimestamp | None = None,
         threadpool: ThreadPoolExecutor | None = None,
@@ -247,7 +249,7 @@ class SOMATileDBContext(ContextBase):
         return self._tiledb_ctx
 
     @property
-    def tiledb_config(self) -> Dict[str, str | float]:
+    def tiledb_config(self) -> Config:
         """The TileDB configuration dictionary for this SOMA context.
 
         If this ``SOMATileDBContext`` already has a ``tiledb_ctx``, this will
@@ -261,7 +263,7 @@ class SOMATileDBContext(ContextBase):
         with self._lock:
             return self._internal_tiledb_config()
 
-    def _internal_tiledb_config(self) -> Dict[str, str | float]:
+    def _internal_tiledb_config(self) -> Config:
         """Internal function for getting the TileDB Config.
 
         Returns a new dict with the contents. Caller must hold ``_lock``.
