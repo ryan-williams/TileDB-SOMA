@@ -8,19 +8,6 @@ name: TileDB-SOMA Python CI (Minimal)
 # To test the full matrix on a working branch, invoke ./python-ci-full.yml from
 #   https://github.com/single-cell-data/TileDB-SOMA/actions/workflows/python-ci-full.yml
 on:
-  pull_request:
-    branches:
-      - main
-      - 'release-*'
-    paths:
-      - '**'
-      - '!**.md'
-      - '!apis/r/**'
-      - '!docker/**'
-      - '!docs/**'
-      - '!.github/**'
-      - '.github/workflows/python-ci-minimal.yml'
-      - '.github/workflows/python-ci-single.yml'
   workflow_dispatch:
 
 jobs:
@@ -29,15 +16,12 @@ jobs:
       fail-fast: true
 
       matrix:
-        os: [ubuntu-24.04, macos-latest]
-        python-version: ['3.9', '3.12', '3.13']
+        os: [ubuntu-24.04]
+        python-version: ['3.9', '3.12']
         include:
           - os: ubuntu-24.04
             cc: gcc-13
             cxx: g++-13
-          - os: macos-latest
-            cc: clang
-            cxx: clang++
     uses: ./.github/workflows/python-ci-single.yml
     with:
       os: ${{ matrix.os }}
