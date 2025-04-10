@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Callable
 
+import numpy as np
 import pytest
+
+import tiledbsoma
+from .test_sparse_nd_array import create_random_tensor
 
 try:
     import dask.array as da
@@ -135,6 +141,62 @@ def test_dask_query_to_anndata(
         dask=dict(chunk_size=(obs_chunk_size, var_chunk_size)),
     )
     verify_dask_array(ad1.X, ad2.X)
+
+
+@pytest.mark.parametrize(
+    "obs_query,var_query,shape,nnz,obs_chunk_size,var_chunk_size",
+    [(AxisQuery(), AxisQuery(), (80, 20), 1600, 20, 3)],
+)
+def test_dask_query_to_anndata_timestamp(
+    conftest_pbmc_small_h5ad_path: Path,
+    obs_query: AxisQuery,
+    var_query: AxisQuery,
+    obs_chunk_size: int,
+    var_chunk_size: int,
+    verify_dask_array: VerifyDaskArray,
+):
+    with TemporaryDirectory("conftest_pbmc_small_exp_") as exp_path:
+        tiledbsoma.io.from_h5ad(
+            exp_path,
+            conftest_pbmc_small_h5ad_path,
+            measurement_name="RNA",
+        )
+        with Experiment.open(exp_path, mode='w') as exp:
+            timestamp_ms_0 = exp.tiledb_timestamp_ms
+            X = exp.ms["RNA"].X["data"]
+            arrow_tensor = create_random_tensor(
+                format="csr",
+                shape=X.shape,
+                dtype=np.float32(),
+                seed=1111,
+            )
+            X.write(arrow_tensor)
+
+        with Experiment.open(exp_path) as exp:
+            query = exp.axis_query(
+                measurement_name="RNA",
+                obs_query=obs_query,
+                var_query=var_query,
+            )
+            ad1 = query.to_anndata(X_name="data")
+            ad2 = query.to_anndata(
+                X_name="data",
+                dask=dict(chunk_size=(obs_chunk_size, var_chunk_size)),
+            )
+            verify_dask_array(ad1.X, ad2.X)
+
+        with Experiment.open(exp_path, tiledb_timestamp=timestamp_ms_0) as exp:
+            query = exp.axis_query(
+                measurement_name="RNA",
+                obs_query=obs_query,
+                var_query=var_query,
+            )
+            ad1 = query.to_anndata(X_name="data")
+            ad2 = query.to_anndata(
+                X_name="data",
+                dask=dict(chunk_size=(obs_chunk_size, var_chunk_size)),
+            )
+            verify_dask_array(ad1.X, ad2.X)
 
 
 @pytest.mark.parametrize("obs_chunk_size", [20, 30, 80, 100])
