@@ -1,5 +1,5 @@
 ---
-title: Daily {{ tools.context.action }} run failing
+title: Daily {{ tools.context.workflow }} run failing
 labels: bug
 ---
 
